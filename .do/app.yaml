@@ -1,0 +1,20 @@
+name: face-detection-service
+region: nyc
+services:
+- name: face-detection
+  github:
+    repo: https://github.com/yourusername/face-detection-service
+    branch: main
+  build_command: pip install -r requirements.txt
+  run_command: gunicorn --bind 0.0.0.0:$PORT app:app
+  environment_slug: python
+  instance_count: 1
+  instance_size_slug: professional-xs
+  health_check:
+    http_path: /health
+  routes:
+  - path: /
+  envs:
+  - key: MAX_FILE_SIZE
+    value: "104857600"
+    scope: RUN_TIME
