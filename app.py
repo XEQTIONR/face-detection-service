@@ -97,3 +97,11 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
     background_tasks.add_task(remove_file, output_path)
 
     return FileResponse(output_path, media_type="video/mp4", filename="redacted.mp4")
+
+@app.get("/debug-ffmpeg")
+def debug_ffmpeg():
+    try:
+        res = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True)
+        return {"status": "found", "version": res.stdout.split('\n')[0]}
+    except FileNotFoundError:
+        return {"status": "not found", "error": "FFmpeg binary is missing from the OS"}
