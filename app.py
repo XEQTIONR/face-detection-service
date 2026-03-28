@@ -32,10 +32,8 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
         while chunk := await video.read(1024 * 1024): # Read 1MB at a time
             input_temp.write(chunk)
     finally:
+        input_path = input_temp.name
         input_temp.close()
-    
-    input_path = input_temp.name
-    input_temp.close()
     
     output_path = input_path.replace(".mp4", "_out.mp4")
     logger.info(f"Temporary input path: {input_path}")
