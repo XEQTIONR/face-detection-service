@@ -28,8 +28,12 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
     logger.info(f"Received file: {video.filename}")
     
     # 1. Save input
-    input_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-    input_temp.write(await video.read())
+    try:
+        while chunk := await video.read(1024 * 1024): # Read 1MB at a time
+            input_temp.write(chunk)
+    finally:
+        input_temp.close()
+    
     input_path = input_temp.name
     input_temp.close()
     
@@ -91,7 +95,7 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
             try:
                 # 3. Ensure the frame is in C-contiguous memory (required for pipes)
                 logger.info("Trying step 3")
-                frame_bytes = frame.astype(np.uint8).tobytes()
+                frame_bytes = frame.tobytes()
             except Exception as e:
                 logger.error(f"Step 3 Error during processing: {e}")
 
