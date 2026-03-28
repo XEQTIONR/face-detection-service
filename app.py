@@ -45,7 +45,7 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
-    if fps <= 0: fps = 24
+    if fps <= 0: fps = 24.0
     
     logger.info(f"Video Meta: {width}x{height} at {fps} FPS")
 
@@ -82,6 +82,7 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
             try:
                 # 2. THE CRITICAL FIX: Force frame to match the pipe's expected size
                 # If the frame is 1081x1920 but the pipe expects 1080x1920, it fails on frame 2.
+                logger.info("Trying step 2")
                 if frame.shape[1] != width or frame.shape[0] != height:
                     frame = cv2.resize(frame, (width, height))
             except Exception as e:
@@ -89,11 +90,13 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
 
             try:
                 # 3. Ensure the frame is in C-contiguous memory (required for pipes)
+                logger.info("Trying step 3")
                 frame_bytes = frame.astype(np.uint8).tobytes()
             except Exception as e:
                 logger.error(f"Step 3 Error during processing: {e}")
 
             try:
+                logger.info("Trying step 4")
                 process.stdin.write(frame_bytes)
             except BrokenPipeError:
                 logger.error("FFmpeg pipe closed unexpectedly. Check FFmpeg stderr for details.")
