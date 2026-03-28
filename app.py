@@ -76,8 +76,10 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
             faces = face_cascade.detectMultiScale(gray, 1.1, 4)
             for (x, y, w, h) in faces:
                 cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 0), -1)
-
+                logger.info("rectange created")
+            
             process.stdin.write(frame.tobytes())
+            logger.info("wrote bytes")
             frame_count += 1
             if frame_count % 30 == 0:
                 logger.info(f"Processed {frame_count} frames...")
