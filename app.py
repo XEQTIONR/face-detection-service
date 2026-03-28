@@ -8,7 +8,7 @@ from starlette.background import BackgroundTasks
 app = FastAPI(title="Face Redaction Microservice")
 
 # Load OpenCV's pre-trained Haar Cascade for face detection
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+# face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
 def remove_file(path: str):
     """Utility to clean up temporary files after the response is sent."""
@@ -35,12 +35,14 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
     # Set up the video writer (using mp4v codec)
     # Use 'avc1' for H.264 encoding, which is the most compatible for web/mp4
     # If 'avc1' fails on the server, 'mp4v' is the fallback, but 'avc1' is better for playback
-    fourcc = cv2.VideoWriter_fourcc(*'avc1') 
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
     print(f"Input path: {input_path}")
     print(f"Video Properties: {width}x{height} @ {fps} FPS")
+
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcas_frontalface_default.xml')
     
     if not out.isOpened():
         # Fallback to mp4v if avc1 isn't available on the system
@@ -62,6 +64,9 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
         # Draw a black square over each detected face
         for (x, y, w, h) in faces:
             cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 0), -1) # -1 fills the rectangle
+
+        if frame.shape[1] != width or frame.shape[0] != height:
+            frame = cv2.resize(frame, (width, height))
 
         # Write the processed frame to the output video
         out.write(frame)
