@@ -1,74 +1,99 @@
 import cv2
 import ffmpeg
-import numpy as np
 import os
 import tempfile
+import logging
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks
 from fastapi.responses import FileResponse
 
+# Setup logging so you can see errors in the DigitalOcean "Runtime Logs"
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 app = FastAPI()
 
-# Load the face detection model
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+# Get the absolute path to the XML file to avoid "File Not Found" errors
+CASCADE_PATH = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
 
 def remove_file(path: str):
     if os.path.exists(path):
         os.remove(path)
+        logger.info(f"Cleaned up: {path}")
 
 @app.post("/anonymize/")
 async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile = File(...)):
-    # 1. Save uploaded file to a temporary location
+    logger.info(f"Received file: {video.filename}")
+    
+    # 1. Save input
     input_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
     input_temp.write(await video.read())
     input_path = input_temp.name
     input_temp.close()
-
+    
     output_path = input_path.replace(".mp4", "_out.mp4")
+    logger.info(f"Temporary input path: {input_path}")
 
-    # 2. Open video to get metadata
+    # 2. Open video and check if it actually opened
     cap = cv2.VideoCapture(input_path)
+    if not cap.isOpened():
+        logger.error("Could not open input video with OpenCV")
+        return {"error": "Invalid video format"}
+
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
     if fps <= 0: fps = 24
+    
+    logger.info(f"Video Meta: {width}x{height} at {fps} FPS")
 
-    # 3. Setup FFmpeg process for writing (The "Magic" Fix)
-    # This creates an H.264 MP4 that is web-compatible
-    process = (
-        ffmpeg
-        .input('pipe:', format='rawvideo', pix_fmt='bgr24', s=f'{width}x{height}', r=fps)
-        .output(output_path, pix_fmt='yuv420p', vcodec='libx264', preset='ultrafast')
-        .overwrite_output()
-        .run_async(pipe_stdin=True)
-    )
-
+    # 3. Setup FFmpeg Pipe
     try:
+        process = (
+            ffmpeg
+            .input('pipe:', format='rawvideo', pix_fmt='bgr24', s=f'{width}x{height}', r=fps)
+            .output(output_path, pix_fmt='yuv420p', vcodec='libx264', preset='ultrafast')
+            .overwrite_output()
+            .run_async(pipe_stdin=True, pipe_stderr=True) # Catch FFmpeg errors
+        )
+        logger.info("FFmpeg pipe initialized")
+    except Exception as e:
+        logger.error(f"FFmpeg startup failed: {e}")
+        return {"error": "FFmpeg initialization failed"}
+
+    # 4. Processing Loop
+    try:
+        frame_count = 0
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
-
-            # Face Detection
+            
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = face_cascade.detectMultiScale(gray, 1.1, 4)
-
             for (x, y, w, h) in faces:
                 cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 0), -1)
 
-            # Push the processed frame into the FFmpeg pipe
             process.stdin.write(frame.tobytes())
+            frame_count += 1
+            if frame_count % 30 == 0:
+                logger.info(f"Processed {frame_count} frames...")
 
+    except Exception as e:
+        logger.error(f"Error during processing: {e}")
     finally:
         cap.release()
-        process.stdin.close()
+        if process.stdin:
+            process.stdin.close()
         process.wait()
+        logger.info("Processing complete")
 
-    # 4. Cleanup and Return
+    # 5. Verify Output exists
+    if not os.path.exists(output_path) or os.path.getsize(output_path) < 100:
+        logger.error("Output file is missing or empty")
+        return {"error": "Processing failed to produce output"}
+
     background_tasks.add_task(remove_file, input_path)
     background_tasks.add_task(remove_file, output_path)
 
     return FileResponse(output_path, media_type="video/mp4", filename="redacted.mp4")
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
