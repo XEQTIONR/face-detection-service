@@ -1,18 +1,25 @@
-# This image comes with OpenCV and NumPy pre-installed and optimized
-FROM gocv/opencv:4.10.0
+FROM python:3.10-slim
 
-# Set working directory
 WORKDIR /app
 
-# Install only the web-related dependencies
-# We skip opencv-python-headless here because it's already in the base image
-RUN pip install --no-cache-dir fastapi uvicorn python-multipart
+# Install the essential system libraries for OpenCV
+RUN apt-get update && apt-get install -y \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgl1-mesa-glx \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy your application code
+# Copy and install requirements
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the app
 COPY app.py .
 
-# Digital Ocean App Platform typically uses port 8080 by default
+# Standard DigitalOcean Port
 EXPOSE 8080
 
-# Run the app
+# Explicitly call uvicorn
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
