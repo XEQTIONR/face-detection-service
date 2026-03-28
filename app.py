@@ -86,24 +86,32 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
                 # If the frame is 1081x1920 but the pipe expects 1080x1920, it fails on frame 2.
                 logger.info("Trying step 2")
                 if frame.shape[1] != width or frame.shape[0] != height:
-                    frame = cv2.resize(frame, (width, height))
+                    old_frame = frame
+                    frame = cv2.resize(old_frame, (width, height))
+                    del old_frame # Manually free the large original frame
             except Exception as e:
                 logger.error(f"Step 2 Error during processing: {e}")
 
-            try:
-                # 3. Ensure the frame is in C-contiguous memory (required for pipes)
-                logger.info("Trying step 3")
-                frame_bytes = frame.tobytes()
-            except Exception as e:
-                logger.error(f"Step 3 Error during processing: {e}")
+            # try:
+            #     # 3. Ensure the frame is in C-contiguous memory (required for pipes)
+            #     logger.info("Trying step 3")
+            #     frame_bytes = frame.tobytes()
+            # except Exception as e:
+            #     logger.error(f"Step 3 Error during processing: {e}")
 
             try:
                 logger.info("Trying step 4")
-                process.stdin.write(frame_bytes)
+                process.stdin.write(frame)
+                process.stdin.flush()
             except BrokenPipeError:
                 logger.error("FFmpeg pipe closed unexpectedly. Check FFmpeg stderr for details.")
                 break
             logger.info("wrote bytes")
+
+
+            del gray
+            del faces
+            
             frame_count += 1
             if frame_count % 30 == 0:
                 logger.info(f"Processed {frame_count} frames...")
