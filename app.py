@@ -26,15 +26,15 @@ def remove_file(path: str):
 @app.post("/anonymize/")
 async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile = File(...)):
     logger.info(f"Received file: {video.filename}")
-    
+    input_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
     # 1. Save input
     try:
         while chunk := await video.read(1024 * 1024): # Read 1MB at a time
             input_temp.write(chunk)
     finally:
-        input_path = input_temp.name
         input_temp.close()
     
+    input_path = input_temp.name
     output_path = input_path.replace(".mp4", "_out.mp4")
     logger.info(f"Temporary input path: {input_path}")
 
