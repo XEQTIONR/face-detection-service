@@ -31,10 +31,18 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
-    
+
     # Set up the video writer (using mp4v codec)
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    # Use 'avc1' for H.264 encoding, which is the most compatible for web/mp4
+    # If 'avc1' fails on the server, 'mp4v' is the fallback, but 'avc1' is better for playback
+    fourcc = cv2.VideoWriter_fourcc(*'avc1') 
+    
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    
+    if not out.isOpened():
+        # Fallback to mp4v if avc1 isn't available on the system
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
     # 3. Process the video frame-by-frame
     while cap.isOpened():
