@@ -1,28 +1,18 @@
-# Use an official Python runtime as a parent image
-FROM python:3.10-slim
+# This image comes with OpenCV and NumPy pre-installed and optimized
+FROM gocv/opencv:4.10.0
 
-# Set the working directory in the container
+# Set working directory
 WORKDIR /app
 
-# Install system dependencies required for OpenCV
-RUN apt-get update && apt-get install -y \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Install only the web-related dependencies
+# We skip opencv-python-headless here because it's already in the base image
+RUN pip install --no-cache-dir fastapi uvicorn python-multipart
 
-# Copy the requirements file into the container
-COPY requirements.txt .
-
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the rest of the application code
+# Copy your application code
 COPY app.py .
 
-# Expose the port the app runs on
-EXPOSE 8000
+# Digital Ocean App Platform typically uses port 8080 by default
+EXPOSE 8080
 
-# Command to run the application using Uvicorn
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the app
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
