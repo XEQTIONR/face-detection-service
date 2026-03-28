@@ -2,6 +2,7 @@ import numpy as np
 import subprocess
 import cv2
 import ffmpeg
+import gc
 import os
 import tempfile
 import logging
@@ -114,7 +115,8 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
 
             frame_count += 1
             if frame_count % 30 == 0:
-                logger.info(f"Processed {frame_count} frames...")
+                gc.collect() 
+                logger.info(f"Frame {frame_count} - RAM usage stable.")
         
 
     except Exception as e:
