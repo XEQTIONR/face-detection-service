@@ -1,0 +1,14 @@
+name: facelift-app
+services:
+- name: face-detection-service
+  # THIS IS THE KEY: It tells DO to use the Dockerfile
+  dockerfile_path: Dockerfile
+  github:
+    branch: main
+    repo: XEQTIONR/face-detection-service
+  http_port: 8080
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  envs:
+  - key: PYTHONUNBUFFERED
+    value: "1"
