@@ -1,7 +1,6 @@
 fastapi==0.104.1
 uvicorn==0.24.0
 python-multipart==0.0.6
-# Force an older, stable NumPy
 numpy==1.26.4
-# Use the most stable headless OpenCV
 opencv-python-headless==4.8.1.78
+ffmpeg-python==0.2.0

@@ -1,86 +1,74 @@
 import cv2
-import tempfile
+import ffmpeg
+import numpy as np
 import os
-from fastapi import FastAPI, UploadFile, File
+import tempfile
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks
 from fastapi.responses import FileResponse
-from starlette.background import BackgroundTasks
 
-app = FastAPI(title="Face Redaction Microservice")
+app = FastAPI()
 
-# Load OpenCV's pre-trained Haar Cascade for face detection
+# Load the face detection model
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
 def remove_file(path: str):
-    """Utility to clean up temporary files after the response is sent."""
     if os.path.exists(path):
         os.remove(path)
 
 @app.post("/anonymize/")
 async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile = File(...)):
-    # 1. Create temporary files for input and output
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as input_temp:
-        input_temp.write(await video.read())
-        input_path = input_temp.name
+    # 1. Save uploaded file to a temporary location
+    input_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+    input_temp.write(await video.read())
+    input_path = input_temp.name
+    input_temp.close()
 
-    output_path = input_path.replace(".mp4", "_output.mp4")
+    output_path = input_path.replace(".mp4", "_out.mp4")
 
-    # 2. Open the video using OpenCV
+    # 2. Open video to get metadata
     cap = cv2.VideoCapture(input_path)
-    
-    # Get video properties
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
+    if fps <= 0: fps = 24
 
-    # Set up the video writer (using mp4v codec)
-    # Use 'avc1' for H.264 encoding, which is the most compatible for web/mp4
-    # If 'avc1' fails on the server, 'mp4v' is the fallback, but 'avc1' is better for playback
-    fourcc = cv2.VideoWriter_fourcc(*'avc1') 
-    
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    # 3. Setup FFmpeg process for writing (The "Magic" Fix)
+    # This creates an H.264 MP4 that is web-compatible
+    process = (
+        ffmpeg
+        .input('pipe:', format='rawvideo', pix_fmt='bgr24', s=f'{width}x{height}', r=fps)
+        .output(output_path, pix_fmt='yuv420p', vcodec='libx264', preset='ultrafast')
+        .overwrite_output()
+        .run_async(pipe_stdin=True)
+    )
 
-    print(f"Input path: {input_path}")
-    print(f"Video Properties: {width}x{height} @ {fps} FPS")
-    
-    if not out.isOpened():
-        # Fallback to mp4v if avc1 isn't available on the system
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    try:
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-    # 3. Process the video frame-by-frame
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+            # Face Detection
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, 1.1, 4)
 
-        # Convert frame to grayscale for the face detection algorithm
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        
-        # Detect faces
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+            for (x, y, w, h) in faces:
+                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 0), -1)
 
-        # Draw a black square over each detected face
-        for (x, y, w, h) in faces:
-            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 0), -1) # -1 fills the rectangle
+            # Push the processed frame into the FFmpeg pipe
+            process.stdin.write(frame.tobytes())
 
-        # Write the processed frame to the output video
-        out.write(frame)
+    finally:
+        cap.release()
+        process.stdin.close()
+        process.wait()
 
-    # 4. Clean up resources
-    cap.release()
-    out.release()
-
-    # 5. Schedule cleanup of temporary files after the user downloads the result
+    # 4. Cleanup and Return
     background_tasks.add_task(remove_file, input_path)
     background_tasks.add_task(remove_file, output_path)
 
-    # 6. Return the processed video
-    return FileResponse(
-        path=output_path, 
-        media_type="video/mp4", 
-        filename=f"anonymized_{video.filename}"
-    )
+    return FileResponse(output_path, media_type="video/mp4", filename="redacted.mp4")
 
 @app.get("/health")
-def health_check():
-    return {"status": "healthy"}
+def health():
+    return {"status": "ok"}
