@@ -57,7 +57,7 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
         process = (
             ffmpeg
             .input('pipe:', format='rawvideo', pix_fmt='bgr24', s=f'{width}x{height}', r=fps)
-            .output(output_path, pix_fmt='yuv420p', vcodec='libx264', preset='ultrafast', bufsize="1M")
+            .output(output_path, pix_fmt='yuv420p', vcodec='libx264', preset='ultrafast', bufsize="5M")
             .overwrite_output()
             .run_async(pipe_stdin=True, pipe_stderr=True) # Catch FFmpeg errors
         )
