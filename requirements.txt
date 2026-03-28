@@ -1,4 +1,7 @@
 fastapi==0.104.1
 uvicorn==0.24.0
 python-multipart==0.0.6
-opencv-python-headless==4.8.1.78
+# Pinning NumPy to the last stable 1.x version avoids the 2.0 compatibility break
+numpy==1.26.4
+# Using a slightly newer OpenCV-headless that supports NumPy 1.26
+opencv-python-headless==4.9.0.80
