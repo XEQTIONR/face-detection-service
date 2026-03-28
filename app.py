@@ -64,8 +64,10 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
 
     # 4. Processing Loop
     try:
+        logger.info("Gonna try")
         frame_count = 0
         while cap.isOpened():
+            logger.info("in while")
             ret, frame = cap.read()
             if not ret:
                 break
