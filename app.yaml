@@ -5,7 +5,7 @@ services:
   dockerfile_path: Dockerfile
   github:
     branch: main
-    repo: XEQTIONR/face-detection-service
+    repo_clone_url: https://github.com/XEQTIONR/face-detection-service
   http_port: 8080
   instance_count: 1
   instance_size_slug: basic-xxs
