@@ -38,6 +38,9 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
     fourcc = cv2.VideoWriter_fourcc(*'avc1') 
     
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+    print(f"Input path: {input_path}")
+    print(f"Video Properties: {width}x{height} @ {fps} FPS")
     
     if not out.isOpened():
         # Fallback to mp4v if avc1 isn't available on the system
