@@ -69,7 +69,7 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
         while cap.isOpened():
             logger.info("in while")
             ret, frame = cap.read()
-            if not ret:
+            if not ret or frame is None:
                 break
             
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -77,8 +77,20 @@ async def anonymize_video(background_tasks: BackgroundTasks, video: UploadFile =
             for (x, y, w, h) in faces:
                 cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 0), -1)
                 logger.info("rectange created")
+
+            # 2. THE CRITICAL FIX: Force frame to match the pipe's expected size
+            # If the frame is 1081x1920 but the pipe expects 1080x1920, it fails on frame 2.
+            if frame.shape[1] != width or frame.shape[0] != height:
+                frame = cv2.resize(frame, (width, height))
+
+            # 3. Ensure the frame is in C-contiguous memory (required for pipes)
+            frame_bytes = frame.astype(np.uint8).tobytes()
             
-            process.stdin.write(frame.tobytes())
+            try:
+                process.stdin.write(frame_bytes)
+            except BrokenPipeError:
+                logger.error("FFmpeg pipe closed unexpectedly. Check FFmpeg stderr for details.")
+                break
             logger.info("wrote bytes")
             frame_count += 1
             if frame_count % 30 == 0:
